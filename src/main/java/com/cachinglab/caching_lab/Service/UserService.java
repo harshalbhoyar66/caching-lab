@@ -1,9 +1,11 @@
-package com.cachinglab.caching_lab.service;
+package com.cachinglab.caching_lab.Service;
 
-import com.cachinglab.caching_lab.cache.AdvancedCache;
-import com.cachinglab.caching_lab.entity.User;
+import com.cachinglab.caching_lab.entity.Customer;
 import com.cachinglab.caching_lab.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.CachePut;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -14,27 +16,20 @@ public class UserService {
 
     private final UserRepository userRepository;
 
-    private final AdvancedCache<Long, User> cache =
-            new AdvancedCache<>(100, 60_000);
+    // READ → cache result
+    @Cacheable(value = "users", key = "#id")
+    public Customer getUser(Long id) {
 
-    public User getUser(Long id) {
+        System.out.println("Fetching USER from DB");
 
-        User cached = cache.get(id);
-        if (cached != null) {
-            System.out.println("From CACHE");
-            return cached;
-        }
-
-        System.out.println("From DB");
-        User user = userRepository.findById(id)
+        return userRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("User not found"));
-
-        cache.put(id, user);
-        return user;
     }
 
-    public User createUser(String name, String email) {
-        User user = User.builder()
+    // CREATE → store user in DB
+    public Customer createUser(String name, String email) {
+
+        Customer user = Customer.builder()
                 .name(name)
                 .email(email)
                 .createdAt(LocalDateTime.now())
@@ -43,8 +38,17 @@ public class UserService {
         return userRepository.save(user);
     }
 
+    // UPDATE → update cache
+    @CachePut(value = "users", key = "#user.id")
+    public Customer updateUser(Customer user) {
+
+        return userRepository.save(user);
+    }
+
+    // DELETE → remove from cache
+    @CacheEvict(value = "users", key = "#id")
     public void deleteUser(Long id) {
+
         userRepository.deleteById(id);
-        cache.evict(id);
     }
 }
