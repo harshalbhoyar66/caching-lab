@@ -9,15 +9,13 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-
 @Service
 @RequiredArgsConstructor
 public class UserService {
 
     private final UserRepository userRepository;
 
-    // READ → cache result
-    @Cacheable(value = "users", key = "#id")
+    @Cacheable(value = "users", key = "#id", sync = true)
     public Customer getUser(Long id) {
 
         System.out.println("Fetching USER from DB");
@@ -26,10 +24,9 @@ public class UserService {
                 .orElseThrow(() -> new RuntimeException("User not found"));
     }
 
-    // CREATE → store user in DB
     public Customer createUser(String name, String email) {
 
-        Customer user = Customer.builder()
+        Customer user =Customer.builder()
                 .name(name)
                 .email(email)
                 .createdAt(LocalDateTime.now())
@@ -38,14 +35,12 @@ public class UserService {
         return userRepository.save(user);
     }
 
-    // UPDATE → update cache
     @CachePut(value = "users", key = "#user.id")
-    public Customer updateUser(Customer user) {
+    public Customer updateUser(Customer customer) {
 
-        return userRepository.save(user);
+        return userRepository.save(customer);
     }
 
-    // DELETE → remove from cache
     @CacheEvict(value = "users", key = "#id")
     public void deleteUser(Long id) {
 

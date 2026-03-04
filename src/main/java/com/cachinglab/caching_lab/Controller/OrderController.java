@@ -1,7 +1,7 @@
 package com.cachinglab.caching_lab.Controller;
 
 import com.cachinglab.caching_lab.entity.Order;
-import com.cachinglab.caching_lab.service.OrderService;
+import com.cachinglab.caching_lab.Service.OrderService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
