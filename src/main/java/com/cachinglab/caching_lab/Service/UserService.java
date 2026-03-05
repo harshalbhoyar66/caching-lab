@@ -9,6 +9,7 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+
 @Service
 @RequiredArgsConstructor
 public class UserService {
@@ -26,7 +27,7 @@ public class UserService {
 
     public Customer createUser(String name, String email) {
 
-        Customer user =Customer.builder()
+        Customer user = Customer.builder()
                 .name(name)
                 .email(email)
                 .createdAt(LocalDateTime.now())
@@ -36,9 +37,9 @@ public class UserService {
     }
 
     @CachePut(value = "users", key = "#user.id")
-    public Customer updateUser(Customer customer) {
+    public Customer updateUser( Customer user) {
 
-        return userRepository.save(customer);
+        return userRepository.save(user);
     }
 
     @CacheEvict(value = "users", key = "#id")
