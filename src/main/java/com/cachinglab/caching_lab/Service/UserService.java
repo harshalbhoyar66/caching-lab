@@ -2,27 +2,65 @@ package com.cachinglab.caching_lab.Service;
 
 import com.cachinglab.caching_lab.entity.Customer;
 import com.cachinglab.caching_lab.repository.UserRepository;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import lombok.RequiredArgsConstructor;
-import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.CachePut;
-import org.springframework.cache.annotation.Cacheable;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.concurrent.TimeUnit;
 
 @Service
 @RequiredArgsConstructor
 public class UserService {
 
     private final UserRepository userRepository;
+    private final RedisTemplate<String, Object> redisTemplate;
 
-    @Cacheable(value = "users", key = "#id", sync = true)
+    // L1 Cache (10 seconds TTL)
+    private final Cache<Long, Customer> l1Cache =
+            Caffeine.newBuilder()
+                    .maximumSize(100)
+                    .expireAfterWrite(10, TimeUnit.SECONDS)
+                    .build();
+
     public Customer getUser(Long id) {
 
-        System.out.println("Fetching USER from DB");
+        // L1 cache
+        Customer user = l1Cache.getIfPresent(id);
 
-        return userRepository.findById(id)
+        if (user != null) {
+            System.out.println("L1 Cache Hit");
+            return user;
+        }
+
+        // L2 Redis
+        user = (Customer) redisTemplate.opsForValue().get("user:" + id);
+
+        if (user != null) {
+            System.out.println("L2 Redis Hit");
+
+            l1Cache.put(id, user);
+            return user;
+        }
+
+        // DB
+        System.out.println("DB Hit");
+
+        user = userRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("User not found"));
+
+        redisTemplate.opsForValue().set(
+                "user:" + id,
+                user,
+                Duration.ofSeconds(60)
+        );
+
+        l1Cache.put(id, user);
+
+        return user;
     }
 
     public Customer createUser(String name, String email) {
@@ -33,18 +71,40 @@ public class UserService {
                 .createdAt(LocalDateTime.now())
                 .build();
 
-        return userRepository.save(user);
+        Customer saved = userRepository.save(user);
+
+        redisTemplate.opsForValue().set(
+                "user:" + saved.getId(),
+                saved,
+                Duration.ofSeconds(60)
+        );
+
+        l1Cache.put(saved.getId(), saved);
+
+        return saved;
     }
 
-    @CachePut(value = "users", key = "#user.id")
-    public Customer updateUser( Customer user) {
+    public Customer updateUser(Customer user) {
 
-        return userRepository.save(user);
+        Customer updated = userRepository.save(user);
+
+        redisTemplate.opsForValue().set(
+                "user:" + updated.getId(),
+                updated,
+                Duration.ofSeconds(60)
+        );
+
+        l1Cache.put(updated.getId(), updated);
+
+        return updated;
     }
 
-    @CacheEvict(value = "users", key = "#id")
     public void deleteUser(Long id) {
 
         userRepository.deleteById(id);
+
+        redisTemplate.delete("user:" + id);
+
+        l1Cache.invalidate(id);
     }
 }
